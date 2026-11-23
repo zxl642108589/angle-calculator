@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#0b0e13">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="角度计算">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>测量角度计算器</title>
+<style>
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%;margin:0;overscroll-behavior:none}
+  body{
+    background:radial-gradient(120% 70% at 50% 0%,#1b2433 0%,#0b0e13 62%);
+    color:#e8edf5;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    display:flex;justify-content:center;
+    -webkit-user-select:none;user-select:none;
+  }
+  .app{
+    width:100%;max-width:480px;height:100dvh;
+    display:flex;flex-direction:column;padding:12px;gap:10px;
+    padding-bottom:calc(12px + env(safe-area-inset-bottom));
+  }
+
+  /* 顶栏 */
+  header{display:flex;align-items:center;justify-content:space-between;padding:2px 4px;gap:8px}
+  .brand{font-size:13px;font-weight:700;letter-spacing:.5px;color:#7f90a8;white-space:nowrap}
+  .actions{display:flex;gap:6px}
+  .chip{
+    border:none;border-radius:999px;padding:7px 12px;font-size:12.5px;font-weight:700;
+    background:#1b2431;color:#9fb2ca;cursor:pointer;touch-action:manipulation;
+    transition:transform .06s,background .15s;white-space:nowrap;
+  }
+  .chip:active{transform:scale(.94)}
+  .chip.active{background:#2f6fed;color:#fff}
+
+  /* 视图 */
+  .view{flex:1;min-height:0;display:flex;flex-direction:column;gap:10px}
+  .view[hidden]{display:none}
+
+  /* 模式切换 */
+  .mode-row{display:flex;gap:6px;padding:0 2px}
+  .mode-chip{
+    border:1px solid #232c38;border-radius:10px;background:#151b24;color:#7b8ba3;
+    padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;
+    font-family:inherit;touch-action:manipulation;
+  }
+  .mode-chip.active{background:#1e2c40;border-color:#2f6fed;color:#6ea8ff}
+  .mode-chip:active{transform:scale(.97)}
+
+  /* 显示区 */
+  .display{
+    flex:1;min-height:110px;
+    background:linear-gradient(180deg,#141a23,#0f141b);
+    border:1px solid #1e2733;border-radius:20px;
+    padding:12px 18px;display:flex;flex-direction:column;justify-content:flex-end;gap:4px;
+    overflow:hidden;
+  }
+  .expr{
+    font-size:16px;line-height:1.4;color:#7b8ba3;text-align:right;
+    word-break:break-all;max-height:2.9em;overflow-y:auto;
+  }
+  .expr:empty::before{content:'输入表达式';color:#3d4859}
+  .result{
+    font-size:clamp(26px,8.4vw,40px);font-weight:700;text-align:right;
+    color:#fff;line-height:1.2;word-break:break-all;
+    text-shadow:0 0 22px rgba(79,140,255,.28);
+  }
+  .sub{font-size:12.5px;color:#6ea8ff;text-align:right;min-height:15px;line-height:15px}
+  .hint{font-size:12px;color:#ff6b7d;text-align:right;min-height:15px;line-height:15px}
+
+  /* 键盘 */
+  .keys{
+    display:grid;grid-template-columns:repeat(5,1fr);
+    grid-auto-rows:clamp(42px,6.6dvh,54px);gap:7px;
+  }
+  .key{
+    border:none;border-radius:14px;background:#1b222c;color:#dbe4f0;
+    font-size:16px;font-weight:600;font-family:inherit;
+    display:flex;align-items:center;justify-content:center;
+    cursor:pointer;touch-action:manipulation;
+    transition:transform .06s,filter .12s;
+  }
+  .key:active{transform:scale(.94);filter:brightness(1.35)}
+  .key.fn{background:#232c38;color:#9fb2ca;font-size:14px}
+  .key.op{background:#1e2c40;color:#6ea8ff;font-size:18px}
+  .key.clear{background:#3a2330;color:#ff8fa3;font-weight:700}
+  .key.eq{
+    background:linear-gradient(180deg,#4f8cff,#2f6fed);
+    color:#fff;font-size:22px;font-weight:700;grid-row:span 2;
+    box-shadow:0 6px 20px rgba(47,111,237,.35);
+  }
+
+  /* 角度加减面板 */
+  .add-panel{flex:1;display:flex;flex-direction:column;gap:10px;min-height:0;overflow-y:auto}
+  .add-row{
+    background:#141a23;border:1px solid #1e2733;border-radius:16px;padding:10px 14px;
+    display:flex;align-items:center;gap:10px;
+  }
+  .add-row label{font-size:12.5px;font-weight:700;color:#6b7b93;flex:0 0 auto;min-width:18px}
+  .add-row input{
+    flex:1;min-width:0;background:transparent;border:none;outline:none;
+    color:#fff;font-size:22px;font-weight:700;font-family:inherit;text-align:right;
+    padding:2px 0;font-variant-numeric:tabular-nums;
+  }
+  .add-row input::placeholder{color:#3d4859;font-size:15px;font-weight:600}
+  .op-row{display:flex;gap:8px}
+  .op-btn{
+    flex:1;border:1px solid #232c38;border-radius:12px;background:#151b24;
+    color:#7b8ba3;padding:11px;font-size:15px;font-weight:700;cursor:pointer;
+    font-family:inherit;touch-action:manipulation;transition:all .15s;
+  }
+  .op-btn.active{background:#1e2c40;border-color:#2f6fed;color:#6ea8ff}
+  .op-btn:active{transform:scale(.97)}
+  .add-err{font-size:12px;color:#ff6b7d;min-height:15px;text-align:center;line-height:15px}
+  .add-results{display:flex;flex-direction:column;gap:8px}
+  .rcard{
+    background:#141a23;border:1px solid #1e2733;border-radius:14px;
+    padding:11px 16px;cursor:pointer;transition:background .15s;
+  }
+  .rcard:active{background:#1a2130}
+  .rlabel{font-size:11.5px;color:#6b7b93;font-weight:600;letter-spacing:.4px}
+  .rval{font-size:20px;font-weight:700;color:#e8edf5;word-break:break-all;line-height:1.3;margin-top:2px;font-variant-numeric:tabular-nums}
+  .rcard.hl .rval{color:#6ea8ff}
+
+  /* 历史弹层 */
+  .history{
+    position:fixed;inset:0;z-index:50;display:none;
+    align-items:flex-end;justify-content:center;
+    background:rgba(5,8,12,.72);backdrop-filter:blur(6px);
+  }
+  .history.open{display:flex}
+  .history-panel{
+    width:100%;max-width:480px;max-height:72dvh;
+    background:#131922;border:1px solid #232c38;border-bottom:none;
+    border-radius:22px 22px 0 0;padding:16px;
+    display:flex;flex-direction:column;gap:12px;
+    padding-bottom:calc(16px + env(safe-area-inset-bottom));
+    animation:up .22s ease;
+  }
+  @keyframes up{from{transform:translateY(30px);opacity:.4}to{transform:none;opacity:1}}
+  .history-head{display:flex;align-items:center;justify-content:space-between;font-size:14px;color:#8fa0b8;font-weight:600}
+  .history-head>div{display:flex;gap:8px}
+  .history-list{overflow-y:auto;display:flex;flex-direction:column;gap:8px}
+  .hitem{background:#1a2130;border:1px solid #232c38;border-radius:14px;padding:10px 14px;cursor:pointer}
+  .hitem:active{background:#212b3d}
+  .hexpr{font-size:13px;color:#7b8ba3;word-break:break-all;text-align:right}
+  .hres{font-size:18px;font-weight:700;color:#e8edf5;text-align:right;margin-top:2px;word-break:break-all}
+  .empty{text-align:center;color:#4a5568;font-size:13px;padding:26px 0}
+
+  /* Toast */
+  .toast{
+    position:fixed;left:50%;bottom:44px;transform:translateX(-50%) translateY(20px);
+    background:rgba(40,52,70,.96);color:#fff;font-size:13px;font-weight:600;
+    padding:10px 20px;border-radius:999px;opacity:0;pointer-events:none;
+    transition:all .25s;z-index:99;backdrop-filter:blur(8px);
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <header>
+    <div class="brand">测量角度计算器</div>
+    <div class="actions">
+      <button class="chip active" id="viewCalcBtn">计算</button>
+      <button class="chip" id="viewAddBtn">角度±</button>
+      <button class="chip" id="histBtn">历史</button>
+    </div>
+  </header>
+
+  <!-- ========== 计算器视图 ========== -->
+  <div class="view" id="calcView">
+    <div class="mode-row">
+      <button class="mode-chip active" data-mode="dms">DMS 度分秒</button>
+      <button class="mode-chip" data-mode="deg">DEG 十进制度</button>
+    </div>
+
+    <div class="display">
+      <div class="expr" id="expr"></div>
+      <div class="result" id="result">0</div>
+      <div class="sub" id="sub"></div>
+      <div class="hint" id="hint"></div>
+    </div>
+
+    <div class="keys" id="keys"></div>
+  </div>
+
+  <!-- ========== 角度加减视图 ========== -->
+  <div class="view" id="addView" hidden>
+    <div class="add-panel">
+      <div class="add-row">
+        <label>A</label>
+        <input id="addA" type="text" inputmode="decimal" autocomplete="off" spellcheck="false"
+               value="118.225004" placeholder="如 118.225004">
+      </div>
+      <div class="op-row">
+        <button class="op-btn active" data-op="+">A + B</button>
+        <button class="op-btn" data-op="-">A − B</button>
+      </div>
+      <div class="add-row">
+        <label>B</label>
+        <input id="addB" type="text" inputmode="decimal" autocomplete="off" spellcheck="false"
+               value="22.305" placeholder="如 22.305000">
+      </div>
+      <div class="add-err" id="addErr"></div>
+      <div class="add-results">
+        <div class="rcard hl" data-copy="addR-dms">
+          <div class="rlabel">简写 DD.MMSSss</div>
+          <div class="rval" id="addR-dms">—</div>
+        </div>
+        <div class="rcard" data-copy="addR-sym">
+          <div class="rlabel">度分秒</div>
+          <div class="rval" id="addR-sym">—</div>
+        </div>
+        <div class="rcard" data-copy="addR-deg">
+          <div class="rlabel">十进制度</div>
+          <div class="rval" id="addR-deg">—</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 历史记录 -->
+<div class="history" id="history">
+  <div class="history-panel">
+    <div class="history-head">
+      <span>历史记录</span>
+      <div>
+        <button class="chip" id="clearHist">清空</button>
+        <button class="chip" id="closeHist">关闭</button>
+      </div>
+    </div>
+    <div class="history-list" id="historyList"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast">已复制</div>
+
+<script>
+(function(){
+'use strict';
+
+/* =========================================================
+   1. 度分秒工具函数
+   ========================================================= */
+
+/* 数字 -> 十进制度（按 DD.MMSSss 解析） */
+function dmsNumToDeg(n){
+  const sign = n < 0 ? -1 : 1;
+  const abs = Math.abs(n);
+  let str = abs.toString();
+  if (str.includes('e')) str = abs.toFixed(10);
+  const dot = str.indexOf('.');
+  const intPart = dot < 0 ? str : str.slice(0, dot);
+  const fracPart = dot < 0 ? '' : str.slice(dot + 1);
+  const d = parseInt(intPart, 10) || 0;
+  const f = fracPart.padEnd(4, '0');
+  const m = parseInt(f.slice(0, 2), 10) || 0;
+  const secStr = f.slice(2);
+  const sInt = parseInt(secStr.slice(0, 2), 10) || 0;
+  const sDec = secStr.slice(2);
+  const sec = parseFloat(sInt + '.' + (sDec || '0'));
+  return sign * (d + m / 60 + sec / 3600);
+}
+
+/* 字符串 -> 十进制度（严格解析 DD.MMSSss，非法返回 null） */
+function parseDmsStr(str){
+  str = String(str).trim().replace(/[−–—]/g, '-');
+  if (!str) return null;
+  let neg = false;
+  if (str[0] === '-'){ neg = true; str = str.slice(1); }
+  if (str[0] === '+') str = str.slice(1);
+  if (!/^\d*\.?\d*$/.test(str) || !str) return null;
+  const dot = str.indexOf('.');
+  const intPart = dot < 0 ? (str || '0') : (str.slice(0, dot) || '0');
+  const fracPart = dot < 0 ? '' : str.slice(dot + 1);
+  const d = parseInt(intPart, 10) || 0;
+  const f = fracPart.padEnd(4, '0');
+  const m = parseInt(f.slice(0, 2), 10) || 0;
+  const secStr = f.slice(2);
+  const sInt = parseInt(secStr.slice(0, 2), 10) || 0;
+  const sDec = secStr.slice(2);
+  const sec = parseFloat(sInt + '.' + (sDec || '0'));
+  return (neg ? -1 : 1) * (d + m / 60 + sec / 3600);
+}
+
+/* 十进制度 -> 度分秒各部分 */
+function degToDmsParts(deg){
+  const neg = deg < 0;
+  let totalCs = Math.round(Math.abs(deg) * 360000); // 百分秒
+  let d = Math.floor(totalCs / 360000); totalCs -= d * 360000;
+  let m = Math.floor(totalCs / 6000);   totalCs -= m * 6000;
+  let s = Math.floor(totalCs / 100);
+  let cs = totalCs % 100;
+  return { neg, d, m, s, cs };
+}
+
+/* 简写格式：118.225004 */
+function fmtDmsCompact(deg){
+  if (!isFinite(deg)) return deg > 0 ? '∞' : '-∞';
+  const p = degToDmsParts(deg);
+  return (p.neg ? '-' : '') + p.d + '.'
+       + String(p.m).padStart(2,'0')
+       + String(p.s).padStart(2,'0')
+       + String(p.cs).padStart(2,'0');
+}
+
+/* 符号格式：118°22′50.04″ */
+function fmtDmsSymbol(deg){
+  if (!isFinite(deg)) return deg > 0 ? '∞' : '-∞';
+  const p = degToDmsParts(deg);
+  return (p.neg ? '-' : '') + p.d + '°'
+       + String(p.m).padStart(2,'0') + '′'
+       + String(p.s).padStart(2,'0') + '.' + String(p.cs).padStart(2,'0') + '″';
+}
+
+/* 普通数字格式化 */
+function fmtNum(v){
+  if (typeof v !== 'number' || Number.isNaN(v)) return '错误';
+  if (!isFinite(v)) return v > 0 ? '∞' : '-∞';
+  if (v === 0) return '0';
+  const r = parseFloat(v.toPrecision(12));
+  const a = Math.abs(r);
+  if (a >= 1e12 || a < 1e-9) return r.toExponential(8).replace(/\.?0+e/, 'e');
+  return String(r);
+}
+
+/* =========================================================
+   2. 表达式解析器（带角度上下文）
+   ========================================================= */
+function evaluate(src, mode){
+  const s = String(src).replace(/\s+/g, '');
+  let i = 0;
+  let angleCtx = 0;                     // >0 表示数字字面量按度分秒解析
+
+  const DEG = Math.PI / 180;
+
+  const FUNCS = {
+    sin: x => Math.sin(x * DEG),
+    cos: x => Math.cos(x * DEG),
+    tan: x => Math.tan(x * DEG),
+    asin: x => Math.asin(x) / DEG,
+    acos: x => Math.acos(x) / DEG,
+    atan: x => Math.atan(x) / DEG,
+    sinh: Math.sinh, cosh: Math.cosh, tanh: Math.tanh,
+    ln: Math.log, log: Math.log10, lg: Math.log10, log2: Math.log2,
+    sqrt: Math.sqrt, abs: Math.abs, exp: Math.exp
+  };
+  const FORWARD      = { sin:1, cos:1, tan:1, sinh:1, cosh:1, tanh:1 };
+  const ANGLE_RESULT = { asin:1, acos:1, atan:1 };
+
+  function isImplicitStart(c){
+    return c === '(' || c === 'π' || c === '√' || /[a-zA-Z]/.test(c || '');
+  }
+
+  function parseExpr(){
+    let a = parseTerm();
+    while (i < s.length){
+      const c = s[i];
+      if (c === '+'){ i++; const b = parseTerm(); a = { v: a.v + b.v, angle: a.angle && b.angle }; }
+      else if (c === '-' || c === '−'){ i++; const b = parseTerm(); a = { v: a.v - b.v, angle: a.angle && b.angle }; }
+      else break;
+    }
+    return a;
+  }
+
+  function parseTerm(){
+    let a = parseUnary();
+    while (i < s.length){
+      const c = s[i];
+      if (c === '*' || c === '×'){ i++; const b = parseUnary(); a = { v: a.v * b.v, angle: false }; }
+      else if (c === '/' || c === '÷'){ i++; const b = parseUnary(); a = { v: a.v / b.v, angle: false }; }
+      else if (c === '%'){ i++; a = { v: a.v / 100, angle: false }; }
+      else if (isImplicitStart(c)){ const b = parseUnary(); a = { v: a.v * b.v, angle: false }; }
+      else break;
+    }
+    return a;
+  }
+
+  function parseUnary(){
+    const c = s[i];
+    if (c === '-' || c === '−'){ i++; const u = parseUnary(); return { v: -u.v, angle: u.angle }; }
+    if (c === '+'){ i++; return parseUnary(); }
+    return parsePower();
+  }
+
+  function parsePower(){
+    const base = parsePrimary();
+    if (s[i] === '^'){ i++; const exp = parseUnary(); return { v: Math.pow(base.v, exp.v), angle: false }; }
+    return base;
+  }
+
+  function parseNumber(){
+    const start = i;
+    while (i < s.length && /[0-9]/.test(s[i])) i++;
+    if (s[i] === '.'){ i++; while (i < s.length && /[0-9]/.test(s[i])) i++; }
+    const num = parseFloat(s.slice(start, i));
+    if (Number.isNaN(num)) throw new Error('数字格式有误');
+    return num;
+  }
+
+  function parsePrimary(){
+    if (i >= s.length) throw new Error('表达式不完整');
+    const c = s[i];
+
+    if (c === '('){
+      i++;
+      const v = parseExpr();
+      if (s[i] !== ')') throw new Error('缺少右括号');
+      i++;
+      return v;
+    }
+    if (c === '√'){
+      i++;
+      const p = parsePrimary();
+      return { v: Math.sqrt(p.v), angle: false };
+    }
+    if (c === 'π'){ i++; return { v: Math.PI, angle: false }; }
+
+    if (/[0-9.]/.test(c)){
+      const n = parseNumber();
+      if (angleCtx > 0 && mode === 'dms'){
+        return { v: dmsNumToDeg(n), angle: true };
+      }
+      return { v: n, angle: false };
+    }
+
+    if (/[a-zA-Z]/.test(c)){
+      let name = '';
+      while (i < s.length && /[a-zA-Z]/.test(s[i])) name += s[i++];
+
+      if (name === 'e')  return { v: Math.E, angle: false };
+      if (name === 'pi') return { v: Math.PI, angle: false };
+
+      const fn = FUNCS[name];
+      if (!fn) throw new Error('未知函数 ' + name);
+
+      const isForward     = FORWARD[name] === 1;
+      const isAngleResult = ANGLE_RESULT[name] === 1;
+
+      let arg;
+      if (s[i] === '('){
+        i++;
+        const savedCtx = angleCtx;
+        angleCtx = isForward ? 1 : 0;
+        arg = parseExpr();
+        angleCtx = savedCtx;
+        if (s[i] !== ')') throw new Error('缺少右括号');
+        i++;
+      } else {
+        const savedCtx = angleCtx;
+        angleCtx = isForward ? 1 : 0;
+        arg = parsePrimary();
+        angleCtx = savedCtx;
+      }
+      return { v: fn(arg.v), angle: isAngleResult };
+    }
+
+    throw new Error('无法识别 "' + c + '"');
+  }
+
+  const result = parseExpr();
+  if (i < s.length) throw new Error('表达式有误');
+  return result;
+}
+
+/* =========================================================
+   3. 状态
+   ========================================================= */
+const state = {
+  expr: '',
+  mode: 'dms',
+  view: 'calc',
+  addOp: '+',
+  history: []
+};
+try {
+  state.history = JSON.parse(localStorage.getItem('tc_hist2') || '[]');
+  if (!Array.isArray(state.history)) state.history = [];
+} catch(e){ state.history = []; }
+
+/* =========================================================
+   4. DOM 引用
+   ========================================================= */
+const exprEl    = document.getElementById('expr');
+const resultEl  = document.getElementById('result');
+const subEl     = document.getElementById('sub');
+const hintEl    = document.getElementById('hint');
+const keysEl    = document.getElementById('keys');
+const calcView  = document.getElementById('calcView');
+const addView   = document.getElementById('addView');
+const historyEl = document.getElementById('history');
+const historyList = document.getElementById('historyList');
+const addA = document.getElementById('addA');
+const addB = document.getElementById('addB');
+const addErr = document.getElementById('addErr');
+const addR_dms = document.getElementById('addR-dms');
+const addR_sym = document.getElementById('addR-sym');
+const addR_deg = document.getElementById('addR-deg');
+
+/* =========================================================
+   5. 按键表
+   ========================================================= */
+const KEYS = [
+  { t:'C',      act:'clear', cls:'clear' },
+  { t:'⌫',      act:'back',  cls:'fn'    },
+  { t:'(',      ins:'(',     cls:'fn'    },
+  { t:')',      ins:')',     cls:'fn'    },
+  { t:'÷',      ins:'÷',     cls:'op'    },
+
+  { t:'sin',    ins:'sin(',  cls:'fn'    },
+  { t:'cos',    ins:'cos(',  cls:'fn'    },
+  { t:'tan',    ins:'tan(',  cls:'fn'    },
+  { t:'x²',     ins:'^2',    cls:'fn'    },
+  { t:'×',      ins:'×',     cls:'op'    },
+
+  { t:'sin⁻¹',  ins:'asin(', cls:'fn'    },
+  { t:'cos⁻¹',  ins:'acos(', cls:'fn'    },
+  { t:'tan⁻¹',  ins:'atan(', cls:'fn'    },
+  { t:'√',      ins:'√(',    cls:'fn'    },
+  { t:'−',      ins:'−',     cls:'op'    },
+
+  { t:'7', ins:'7' }, { t:'8', ins:'8' }, { t:'9', ins:'9' },
+  { t:'ln',     ins:'ln(',   cls:'fn'    },
+  { t:'+',      ins:'+',     cls:'op'    },
+
+  { t:'4', ins:'4' }, { t:'5', ins:'5' }, { t:'6', ins:'6' },
+  { t:'log',    ins:'log(',  cls:'fn'    },
+  { t:'π',      ins:'π',     cls:'fn'    },
+
+  { t:'1', ins:'1' }, { t:'2', ins:'2' }, { t:'3', ins:'3' },
+  { t:'e',      ins:'e',     cls:'fn'    },
+  { t:'=',      act:'eq',    cls:'eq'    },
+
+  { t:'0', ins:'0' }, { t:'.', ins:'.' }, { t:'%', ins:'%', cls:'fn' },
+  { t:'1/x',    ins:'^(-1)', cls:'fn'    }
+];
+
+keysEl.innerHTML = KEYS.map((k, idx) =>
+  `<button class="key ${k.cls||''}" data-i="${idx}">${k.t}</button>`
+).join('');
+
+const TOKENS = ['asin(','acos(','atan(','sinh(','cosh(','tanh(',
+                'sin(','cos(','tan(','log(','abs(','ln(','√('];
+function backspace(str){
+  for (const t of TOKENS) if (str.endsWith(t)) return str.slice(0, -t.length);
+  return str.slice(0, -1);
+}
+
+/* =========================================================
+   6. 计算器渲染
+   ========================================================= */
+function setResult(text, isErr){
+  resultEl.textContent = text;
+  resultEl.style.color = isErr ? '#ff6b7d' : '';
+  if (!text){ resultEl.style.fontSize = ''; return; }
+  const n = text.length;
+  resultEl.style.fontSize = n > 18 ? '18px' : n > 14 ? '22px' : n > 11 ? '27px' : n > 8 ? '33px' : '';
+}
+
+function updateCalc(){
+  exprEl.textContent = state.expr;
+  exprEl.scrollTop = exprEl.scrollHeight;
+  hintEl.textContent = '';
+  subEl.textContent = '';
+
+  if (!state.expr.trim()){
+    setResult('0');
+    return;
+  }
+
+  try {
+    const r = evaluate(state.expr, state.mode);
+
+    if (r.angle && state.mode === 'dms'){
+      setResult(fmtDmsCompact(r.v));
+      subEl.textContent = fmtDmsSymbol(r.v);
+    } else {
+      setResult(fmtNum(r.v));
+    }
+  } catch(err){
+    setResult('', true);
+    hintEl.textContent = err.message || '表达式有误';
+  }
+}
+
+/* =========================================================
+   7. 角度加减
+   ========================================================= */
+function updateAdd(){
+  const a = parseDmsStr(addA.value);
+  const b = parseDmsStr(addB.value);
+
+  let err = '';
+  if (a === null) err += 'A 格式有误 ';
+  if (b === null) err += 'B 格式有误';
+  addErr.textContent = err.trim();
+
+  if (a === null || b === null){
+    addR_dms.textContent = '—';
+    addR_sym.textContent = '—';
+    addR_deg.textContent = '—';
+    return;
+  }
+
+  const r = state.addOp === '+' ? a + b : a - b;
+  addR_dms.textContent = fmtDmsCompact(r);
+  addR_sym.textContent = fmtDmsSymbol(r);
+  addR_deg.textContent = fmtNum(r) + '°';
+}
+
+/* =========================================================
+   8. 提交 / 历史
+   ========================================================= */
+function buzz(ms){ try{ navigator.vibrate && navigator.vibrate(ms); }catch(e){} }
+
+function commit(){
+  if (!state.expr.trim()) return;
+
+  let r;
+  try {
+    r = evaluate(state.expr, state.mode);
+  } catch(err){
+    hintEl.textContent = err.message || '表达式有误';
+    return;
+  }
+
+  const outStr = (r.angle && state.mode === 'dms')
+    ? fmtDmsCompact(r.v)
+    : fmtNum(r.v);
+
+  state.history.unshift({
+    e: state.expr,
+    r: outStr,
+    mode: state.mode
+  });
+  if (state.history.length > 60) state.history.pop();
+  try { localStorage.setItem('tc_hist2', JSON.stringify(state.history)); } catch(e){}
+
+  if (outStr !== '∞' && outStr !== '-∞' && outStr !== '错误'){
+    state.expr = outStr;
+  } else {
+    state.expr = '';
+  }
+  updateCalc();
+  buzz(12);
+}
+
+function renderHistory(){
+  if (!state.history.length){
+    historyList.innerHTML = '<div class="empty">暂无记录</div>';
+    return;
+  }
+  historyList.innerHTML = state.history.map(function(h, idx){
+    return `<div class="hitem" data-i="${idx}">
+      <div class="hexpr">${escapeHtml(h.e)}</div>
+      <div class="hres">= ${escapeHtml(h.r)}</div>
+    </div>`;
+  }).join('');
+}
+
+function escapeHtml(str){
+  return String(str).replace(/[&<>"']/g, c => (
+    { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]
+  ));
+}
+
+/* =========================================================
+   9. 复制 / Toast
+   ========================================================= */
+const toastEl = document.getElementById('toast');
+let toastTimer = null;
+function showToast(msg){
+  toastEl.textContent = msg;
+  toastEl.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toastEl.classList.remove('show'), 1300);
+}
+function fallbackCopy(text, cb){
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand('copy'); cb(); } catch(e){ showToast('复制失败'); }
+  ta.remove();
+}
+function copyText(text){
+  if (!text || text === '—') return;
+  const done = () => showToast('已复制 ' + text);
+  if (navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(done).catch(() => fallbackCopy(text, done));
+  } else {
+    fallbackCopy(text, done);
+  }
+}
+
+/* =========================================================
+   10. 事件绑定
+   ========================================================= */
+keysEl.addEventListener('click', function(e){
+  const btn = e.target.closest('.key');
+  if (!btn) return;
+  buzz(8);
+  const k = KEYS[+btn.dataset.i];
+  if (k.act === 'clear')      state.expr = '';
+  else if (k.act === 'back')  state.expr = backspace(state.expr);
+  else if (k.act === 'eq'){ commit(); return; }
+  else                        state.expr += k.ins;
+  updateCalc();
+});
+
+document.querySelectorAll('.mode-chip').forEach(function(btn){
+  btn.addEventListener('click', function(){
+    document.querySelectorAll('.mode-chip').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    state.mode = btn.dataset.mode;
+    buzz(8);
+    updateCalc();
+  });
+});
+
+document.getElementById('viewCalcBtn').addEventListener('click', function(){
+  state.view = 'calc';
+  calcView.hidden = false;
+  addView.hidden = true;
+  this.classList.add('active');
+  document.getElementById('viewAddBtn').classList.remove('active');
+});
+document.getElementById('viewAddBtn').addEventListener('click', function(){
+  state.view = 'add';
+  calcView.hidden = true;
+  addView.hidden = false;
+  this.classList.add('active');
+  document.getElementById('viewCalcBtn').classList.remove('active');
+  updateAdd();
+});
+
+addA.addEventListener('input', updateAdd);
+addB.addEventListener('input', updateAdd);
+document.querySelectorAll('.op-btn').forEach(function(btn){
+  btn.addEventListener('click', function(){
+    document.querySelectorAll('.op-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    state.addOp = btn.dataset.op;
+    updateAdd();
+  });
+});
+document.querySelectorAll('[data-copy]').forEach(function(el){
+  el.addEventListener('click', function(){
+    const target = document.getElementById(el.dataset.copy);
+    if (target) copyText(target.textContent);
+  });
+});
+
+document.getElementById('histBtn').addEventListener('click', function(){
+  renderHistory();
+  historyEl.classList.add('open');
+});
+document.getElementById('closeHist').addEventListener('click', function(){
+  historyEl.classList.remove('open');
+});
+historyEl.addEventListener('click', function(e){
+  if (e.target === historyEl) historyEl.classList.remove('open');
+});
+document.getElementById('clearHist').addEventListener('click', function(){
+  state.history = [];
+  localStorage.removeItem('tc_hist2');
+  renderHistory();
+});
+historyList.addEventListener('click', function(e){
+  const item = e.target.closest('.hitem');
+  if (!item) return;
+  const rec = state.history[+item.dataset.i];
+  if (!rec) return;
+  state.expr = rec.e;
+  historyEl.classList.remove('open');
+  if (state.view !== 'calc'){
+    state.view = 'calc';
+    calcView.hidden = false;
+    addView.hidden = true;
+    document.getElementById('viewCalcBtn').classList.add('active');
+    document.getElementById('viewAddBtn').classList.remove('active');
+  }
+  updateCalc();
+});
+
+document.addEventListener('keydown', function(e){
+  if (state.view !== 'calc') return;
+  const k = e.key;
+  if (k >= '0' && k <= '9'){ state.expr += k; updateCalc(); }
+  else if (k === '.'){ state.expr += '.'; updateCalc(); }
+  else if (k === '+'){ state.expr += '+'; updateCalc(); }
+  else if (k === '-'){ state.expr += '−'; updateCalc(); }
+  else if (k === '*'){ state.expr += '×'; updateCalc(); }
+  else if (k === '/'){ e.preventDefault(); state.expr += '÷'; updateCalc(); }
+  else if (k === '(' || k === ')'){ state.expr += k; updateCalc(); }
+  else if (k === '^'){ state.expr += '^'; updateCalc(); }
+  else if (k === 'p' || k === 'P'){ state.expr += 'π'; updateCalc(); }
+  else if (k === 'Enter' || k === '='){ e.preventDefault(); commit(); }
+  else if (k === 'Backspace'){ e.preventDefault(); state.expr = backspace(state.expr); updateCalc(); }
+  else if (k === 'Escape'){ state.expr = ''; updateCalc(); }
+});
+
+/* =========================================================
+   11. 启动
+   ========================================================= */
+updateCalc();
+updateAdd();
+
+})();
+</script>
+
+<!-- PWA：注册 Service Worker -->
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  });
+}
+</script>
+
+</body>
+</html>
